@@ -1,11 +1,15 @@
 from pathlib import Path
 import mongoengine
+import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = 'django-insecure-d&g$sgy#j6hj6-7z*0tl9opg@%i)t3x^0qnktk&)2r!3z=0g44'
 
 DEBUG = True
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 ALLOWED_HOSTS = []
 
