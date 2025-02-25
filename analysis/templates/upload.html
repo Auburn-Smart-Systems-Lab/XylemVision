@@ -1,14 +1,33 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
     <title>Upload Images</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .error { color: red; margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; }
+        input[type="file"] { margin-bottom: 10px; }
+    </style>
 </head>
 <body>
     <h1>Upload One or More Images</h1>
+
+    {% if form.errors %}
+      <div class="error">
+        {{ form.errors }}
+      </div>
+    {% endif %}
+
     <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit">Upload</button>
+        <div>
+            <label for="{{ form.images.id_for_label }}">Select Images:</label>
+            {{ form.images }}
+        </div>
+        <div>
+            <button type="submit">Upload</button>
+        </div>
     </form>
 </body>
 </html>

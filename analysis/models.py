@@ -1,7 +1,7 @@
 import datetime
 from mongoengine import Document, StringField, FloatField, IntField, ListField, DictField, DateTimeField
 
-class ProcessedImage(Document):
+class Analysis(Document):
     original_image = StringField(required=True)
     processed_image = StringField(required=True)
     vascular_bundle_image = StringField(required=True)
