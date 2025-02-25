@@ -18,7 +18,7 @@ class MultiFileField(forms.FileField):
         files = self.to_python(data)
         if self.required and not files:
             raise forms.ValidationError("No file was submitted. Check the encoding type on the form.")
-
+        # Flatten in case any nested lists exist
         flattened = []
         for item in files:
             if isinstance(item, list):

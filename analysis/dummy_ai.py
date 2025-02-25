@@ -20,6 +20,7 @@ def dummy_ai_module(image_file):
     total_root = add_text(total_root, "Total Root Mask")
     xylem = add_text(xylem, "Xylem Mask")
     
+    # Dummy metrics
     vascular_area = 123.4
     vascular_diameter = 45.6
     xylem_count = 7
