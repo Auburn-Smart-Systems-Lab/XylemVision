@@ -1,5 +1,4 @@
 from pathlib import Path
-import mongoengine
 import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -59,12 +58,6 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
-
-mongoengine.connect(
-    db='root-structural-analysis',
-    host='172.19.187.4',
-    port=27017
-)
 
 AUTH_PASSWORD_VALIDATORS = [
     {

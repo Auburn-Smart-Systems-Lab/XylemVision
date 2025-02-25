@@ -1,11 +1,13 @@
 import base64
-from io import BytesIO
-from django.shortcuts import render
+import io
 from django.http import HttpResponse
+from django.shortcuts import render
 from .forms import ImageUploadForm
 from .dummy_ai import dummy_ai_module
 from PIL import Image
 import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.drawing.image import Image as OXI
 
 def upload_images(request):
     results = None
@@ -53,6 +55,101 @@ def upload_images(request):
     return render(request, 'upload.html', {'form': form, 'results': results})
 
 
+def download_all_analysis(request):
+    results = request.session.get('analysis_results')
+    if not results:
+        return HttpResponse("No analyses available for download.", status=400)
+    
+    wb = openpyxl.Workbook()
+    default_sheet = wb.active
+    wb.remove(default_sheet)
+    
+    def add_image(ws, base64_str, cell, width, height):
+        img_data = base64.b64decode(base64_str)
+        img_io = io.BytesIO(img_data)
+        img = OXI(img_io)
+        img.width = width
+        img.height = height
+        ws.add_image(img, cell)
+    
+    for result in results:
+        sheet_name = result.get("filename")
+        if len(sheet_name) > 31:
+            sheet_name = sheet_name[:31]
+        ws = wb.create_sheet(title=sheet_name)
+        
+        for col in ["A", "B", "C", "D"]:
+            ws.column_dimensions[col].width = 25
+        for col in ["E", "F", "G", "H"]:
+            ws.column_dimensions[col].width = 20
+        
+        ws.merge_cells("A1:H1")
+        header = ws["A1"]
+        header.value = f"Analysis Report for {result.get('filename')}"
+        header.font = Font(bold=True, size=14, color="FFFFFF")
+        header.fill = PatternFill(start_color="007bff", end_color="007bff", fill_type="solid")
+        header.alignment = Alignment(horizontal="center", vertical="center")
+        ws.row_dimensions[1].height = 30
+        
+        data_start = 3
+        ws["A" + str(data_start)] = "Metric"
+        ws["B" + str(data_start)] = "Value"
+        ws["A" + str(data_start)].font = Font(bold=True)
+        ws["B" + str(data_start)].font = Font(bold=True)
+        current_row = data_start + 1
+        metrics = [
+            ("Vascular Area", result.get("vascular_area")),
+            ("Vascular Diameter", result.get("vascular_diameter")),
+            ("Xylem Count", result.get("xylem_count")),
+            ("Xylem Diameter", result.get("xylem_diameter")),
+        ]
+        for metric, value in metrics:
+            ws["A" + str(current_row)] = metric
+            ws["B" + str(current_row)] = value
+            current_row += 1
+        
+        current_row += 1
+        ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
+        cell = ws.cell(row=current_row, column=1)
+        cell.value = "Xylem Details"
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color="28a745", end_color="28a745", fill_type="solid")
+        cell.alignment = Alignment(horizontal="center")
+        current_row += 1
+        ws["A" + str(current_row)] = "ID"
+        ws["B" + str(current_row)] = "Area"
+        ws["C" + str(current_row)] = "Diameter"
+        for col in ["A", "B", "C"]:
+            ws[col + str(current_row)].font = Font(bold=True)
+        current_row += 1
+        for detail in result.get("xylem_details", []):
+            ws["A" + str(current_row)] = detail.get("id")
+            ws["B" + str(current_row)] = detail.get("area")
+            ws["C" + str(current_row)] = detail.get("diameter")
+            current_row += 1
+
+        ws["E2"] = "Processed"
+        ws["G2"] = "Vascular Bundle Mask"
+        ws["E11"] = "Total Root Mask"
+        ws["G11"] = "Xylem Mask"
+        add_image(ws, result.get("processed_image"), "E3", 100, 80)
+        add_image(ws, result.get("vascular_image"), "G3", 100, 80)
+        add_image(ws, result.get("total_root_image"), "E12", 100, 80)
+        add_image(ws, result.get("xylem_image"), "G12", 100, 80)
+        ws.row_dimensions[3].height = 80
+        ws.row_dimensions[12].height = 80
+    
+    stream = io.BytesIO()
+    wb.save(stream)
+    stream.seek(0)
+    response = HttpResponse(
+        stream,
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = 'attachment; filename=all_analyses.xlsx'
+    return response
+
+
 def download_analysis(request, analysis_index):
     try:
         index = int(analysis_index) - 1
@@ -64,69 +161,89 @@ def download_analysis(request, analysis_index):
         return HttpResponse("Invalid analysis index or no analyses available.", status=400)
     
     result = results[index]
-    
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "Analysis"
-    
-    ws.append(["Filename", result.get("filename")])
-    ws.append([])
-    ws.append(["Metric", "Value"])
-    ws.append(["Vascular Area", result.get("vascular_area")])
-    ws.append(["Vascular Diameter", result.get("vascular_diameter")])
-    ws.append(["Xylem Count", result.get("xylem_count")])
-    ws.append(["Xylem Diameter", result.get("xylem_diameter")])
-    
-    ws_details = wb.create_sheet(title="Xylem Details")
-    ws_details.append(["ID", "Area", "Diameter"])
+
+    sheet_name = result.get("filename")
+    if len(sheet_name) > 31:
+        sheet_name = sheet_name[:31]
+    ws.title = sheet_name
+
+    for col in ["A", "B", "C", "D"]:
+        ws.column_dimensions[col].width = 25
+    for col in ["E", "F", "G", "H"]:
+        ws.column_dimensions[col].width = 20
+
+    ws.merge_cells("A1:H1")
+    header = ws["A1"]
+    header.value = f"Analysis Report for {result.get('filename')}"
+    header.font = Font(bold=True, size=14, color="FFFFFF")
+    header.fill = PatternFill(start_color="007bff", end_color="007bff", fill_type="solid")
+    header.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 30
+
+    data_start = 3
+    ws["A" + str(data_start)] = "Metric"
+    ws["B" + str(data_start)] = "Value"
+    ws["A" + str(data_start)].font = Font(bold=True)
+    ws["B" + str(data_start)].font = Font(bold=True)
+    current_row = data_start + 1
+    metrics = [
+        ("Vascular Area", result.get("vascular_area")),
+        ("Vascular Diameter", result.get("vascular_diameter")),
+        ("Xylem Count", result.get("xylem_count")),
+        ("Xylem Diameter", result.get("xylem_diameter")),
+    ]
+    for metric, value in metrics:
+        ws["A" + str(current_row)] = metric
+        ws["B" + str(current_row)] = value
+        current_row += 1
+
+    current_row += 1
+    ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
+    cell = ws.cell(row=current_row, column=1)
+    cell.value = "Xylem Details"
+    cell.font = Font(bold=True, color="FFFFFF")
+    cell.fill = PatternFill(start_color="28a745", end_color="28a745", fill_type="solid")
+    cell.alignment = Alignment(horizontal="center")
+    current_row += 1
+    ws["A" + str(current_row)] = "ID"
+    ws["B" + str(current_row)] = "Area"
+    ws["C" + str(current_row)] = "Diameter"
+    for col in ["A", "B", "C"]:
+        ws[col + str(current_row)].font = Font(bold=True)
+    current_row += 1
     for detail in result.get("xylem_details", []):
-        ws_details.append([detail.get("id"), detail.get("area"), detail.get("diameter")])
-    
-    stream = BytesIO()
+        ws["A" + str(current_row)] = detail.get("id")
+        ws["B" + str(current_row)] = detail.get("area")
+        ws["C" + str(current_row)] = detail.get("diameter")
+        current_row += 1
+
+    def add_image(ws, base64_str, cell, width, height):
+        img_data = base64.b64decode(base64_str)
+        img_io = io.BytesIO(img_data)
+        img = OXI(img_io)
+        img.width = width
+        img.height = height
+        ws.add_image(img, cell)
+
+    ws["E2"] = "Processed"
+    ws["G2"] = "Vascular Bundle Mask"
+    ws["E11"] = "Total Root Mask"
+    ws["G11"] = "Xylem Mask"
+    add_image(ws, result.get("processed_image"), "E3", 100, 80)
+    add_image(ws, result.get("vascular_image"), "G3", 100, 80)
+    add_image(ws, result.get("total_root_image"), "E12", 100, 80)
+    add_image(ws, result.get("xylem_image"), "G12", 100, 80)
+    ws.row_dimensions[3].height = 80
+    ws.row_dimensions[12].height = 80
+
+    stream = io.BytesIO()
     wb.save(stream)
     stream.seek(0)
-    
     response = HttpResponse(
         stream,
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
-    response['Content-Disposition'] = f'attachment; filename=analysis_{index+1}.xlsx'
-    return response
-
-
-def download_all_analysis(request):
-    results = request.session.get('analysis_results')
-    if not results:
-        return HttpResponse("No analyses available for download.", status=400)
-    
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Analyses Summary"
-    
-    ws.append(["Analysis #", "Filename", "Vascular Area", "Vascular Diameter", "Xylem Count", "Xylem Diameter"])
-    for i, result in enumerate(results, start=1):
-        ws.append([
-            i,
-            result.get("filename"),
-            result.get("vascular_area"),
-            result.get("vascular_diameter"),
-            result.get("xylem_count"),
-            result.get("xylem_diameter")
-        ])
-    
-    for i, result in enumerate(results, start=1):
-        ws_detail = wb.create_sheet(title=f"Analysis {i} Xylem")
-        ws_detail.append(["ID", "Area", "Diameter"])
-        for detail in result.get("xylem_details", []):
-            ws_detail.append([detail.get("id"), detail.get("area"), detail.get("diameter")])
-    
-    stream = BytesIO()
-    wb.save(stream)
-    stream.seek(0)
-    
-    response = HttpResponse(
-        stream,
-        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    )
-    response['Content-Disposition'] = 'attachment; filename=all_analyses.xlsx'
+    response['Content-Disposition'] = f'attachment; filename={sheet_name}.xlsx'
     return response
