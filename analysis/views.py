@@ -5,13 +5,13 @@ from PIL import Image
 import base64
 
 def upload_images(request):
+    results = None
     if request.method == 'POST':
         form = ImageUploadForm(request.POST, request.FILES)
         if form.is_valid():
             images = form.cleaned_data['images']
             results = []
             for img in images:
-                # Validate that the file is an image
                 try:
                     Image.open(img)
                 except Exception as e:
@@ -20,7 +20,7 @@ def upload_images(request):
 
                 ai_result = dummy_ai_module(img)
                 
-                # Convert ContentFile objects to base64 strings for inline display
+                # Convert ContentFile objects to base64 strings for inline display.
                 processed_b64 = base64.b64encode(ai_result["processed_file"].read()).decode('utf-8')
                 ai_result["processed_file"].seek(0)
                 vascular_b64 = base64.b64encode(ai_result["vascular_file"].read()).decode('utf-8')
@@ -42,9 +42,8 @@ def upload_images(request):
                     "xylem_details": ai_result["xylem_details"],
                 }
                 results.append(result_dict)
-            return render(request, 'results.html', {'results': results})
         else:
             print(form.errors)
     else:
         form = ImageUploadForm()
-    return render(request, 'upload.html', {'form': form})
+    return render(request, 'upload.html', {'form': form, 'results': results})

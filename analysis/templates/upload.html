@@ -1,33 +1,100 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Upload Images</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .error { color: red; margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; }
-        input[type="file"] { margin-bottom: 10px; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Image Upload & Processing</title>
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: #f8f9fa; }
+    .upload-container { margin-top: 50px; }
+    .result-card { margin-bottom: 30px; }
+    .result-card img { border-radius: 5px; }
+    .card-header { background-color: #007bff; color: #fff; }
+  </style>
 </head>
 <body>
-    <h1>Upload One or More Images</h1>
-
-    {% if form.errors %}
-      <div class="error">
-        {{ form.errors }}
-      </div>
-    {% endif %}
-
-    <form method="post" enctype="multipart/form-data">
-        {% csrf_token %}
-        <div>
-            <label for="{{ form.images.id_for_label }}">Select Images:</label>
+  <div class="container upload-container">
+    <h1 class="text-center mb-4">Upload Images for Processing</h1>
+    <div class="row justify-content-center">
+      <div class="col-md-8">
+        {% if form.errors %}
+          <div class="alert alert-danger">
+            {{ form.errors }}
+          </div>
+        {% endif %}
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label for="{{ form.images.id_for_label }}" class="form-label">Select Images:</label>
             {{ form.images }}
+          </div>
+          <button type="submit" class="btn btn-primary">Upload</button>
+        </form>
+      </div>
+    </div>
+
+    {% if results %}
+      <hr class="my-5">
+      <h2 class="text-center mb-4">Processing Results</h2>
+      {% for result in results %}
+        <div class="card result-card">
+          <div class="card-header">
+            Processed Image {{ forloop.counter }}
+          </div>
+          <div class="card-body">
+            <div class="row">
+              <div class="col-md-3">
+                <h5>Processed</h5>
+                <img src="data:image/jpeg;base64,{{ result.processed_image }}" alt="Processed Image" class="img-fluid">
+              </div>
+              <div class="col-md-3">
+                <h5>Vascular Bundle Mask</h5>
+                <img src="data:image/jpeg;base64,{{ result.vascular_image }}" alt="Vascular Bundle Mask" class="img-fluid">
+              </div>
+              <div class="col-md-3">
+                <h5>Total Root Mask</h5>
+                <img src="data:image/jpeg;base64,{{ result.total_root_image }}" alt="Total Root Mask" class="img-fluid">
+              </div>
+              <div class="col-md-3">
+                <h5>Xylem Mask</h5>
+                <img src="data:image/jpeg;base64,{{ result.xylem_image }}" alt="Xylem Mask" class="img-fluid">
+              </div>
+            </div>
+            <div class="mt-4">
+              <h5>Metrics:</h5>
+              <p><strong>Vascular Area:</strong> {{ result.vascular_area }}</p>
+              <p><strong>Vascular Diameter:</strong> {{ result.vascular_diameter }}</p>
+              <p><strong>Xylem Count:</strong> {{ result.xylem_count }}</p>
+              <p><strong>Xylem Diameter:</strong> {{ result.xylem_diameter }}</p>
+              <h6>Xylem Details:</h6>
+              <table class="table table-bordered">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Area</th>
+                    <th>Diameter</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for detail in result.xylem_details %}
+                  <tr>
+                    <td>{{ detail.id }}</td>
+                    <td>{{ detail.area }}</td>
+                    <td>{{ detail.diameter }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-        <div>
-            <button type="submit">Upload</button>
-        </div>
-    </form>
+      {% endfor %}
+    {% endif %}
+  </div>
+
+  <!-- Bootstrap 5 JS Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
