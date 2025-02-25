@@ -1,19 +1,17 @@
-from django.db import models
+import datetime
+from mongoengine import Document, StringField, FloatField, IntField, ListField, DictField, DateTimeField
 
-class ProcessedImage(models.Model):
-    original_image = models.ImageField(upload_to='upload/')
-    processed_image = models.ImageField(upload_to='upload/')
-    vascular_bundle_image = models.ImageField(upload_to='upload/')
-    total_root_image = models.ImageField(upload_to='upload/')
-    xylem_image = models.ImageField(upload_to='upload/')
+class ProcessedImage(Document):
+    original_image = StringField(required=True)
+    processed_image = StringField(required=True)
+    vascular_bundle_image = StringField(required=True)
+    total_root_image = StringField(required=True)
+    xylem_image = StringField(required=True)
 
-    vascular_area = models.FloatField()
-    vascular_diameter = models.FloatField()
-    xylem_count = models.IntegerField()
-    xylem_diameter = models.FloatField()
-    xylem_details = models.JSONField()
+    vascular_area = FloatField(required=True)
+    vascular_diameter = FloatField(required=True)
+    xylem_count = IntField(required=True)
+    xylem_diameter = FloatField(required=True)
+    xylem_details = ListField(DictField())
 
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"Processed image {self.pk}"
+    created_at = DateTimeField(default=datetime.datetime.utcnow)

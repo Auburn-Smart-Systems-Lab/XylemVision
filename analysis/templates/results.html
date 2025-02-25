@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Processing Results</title>
+    <style>
+        .result { margin-bottom: 40px; }
+        .images img { margin-right: 10px; }
+        table { border-collapse: collapse; }
+        table, th, td { border: 1px solid black; padding: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Results</h1>
+    {% for item in results %}
+    <div class="result">
+        <h3>Result for Uploaded Image #{{ forloop.counter }}</h3>
+        <div class="images">
+            <!-- Display the original and processed images -->
+            <img src="{{ item.original_image.url }}" alt="Input Image" width="200"/>
+            <img src="{{ item.processed_image.url }}" alt="Processed Image" width="200"/>
+            <img src="{{ item.vascular_bundle_image.url }}" alt="Vascular Bundle Mask" width="200"/>
+            <img src="{{ item.total_root_image.url }}" alt="Total Root Mask" width="200"/>
+            <img src="{{ item.xylem_image.url }}" alt="Xylem Mask" width="200"/>
+        </div>
+        <div class="metrics">
+            <h4>Vascular Bundle Metrics</h4>
+            <p>Area: {{ item.vascular_area }} &nbsp;&nbsp; Diameter: {{ item.vascular_diameter }}</p>
+            <h4>Xylem Metrics</h4>
+            <p>Count: {{ item.xylem_count }} &nbsp;&nbsp; Diameter: {{ item.xylem_diameter }}</p>
+            <h4>Xylem Details</h4>
+            <table>
+                <tr>
+                    <th>Xylem ID</th>
+                    <th>Area</th>
+                    <th>Diameter</th>
+                </tr>
+                {% for detail in item.xylem_details %}
+                <tr>
+                    <td>{{ detail.id }}</td>
+                    <td>{{ detail.area }}</td>
+                    <td>{{ detail.diameter }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+</body>
+</html>
