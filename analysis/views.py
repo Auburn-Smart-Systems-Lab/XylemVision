@@ -10,17 +10,23 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.drawing.image import Image as OXI
 
 def upload_images(request):
+    warnings = []
     results = None
     if request.method == 'POST':
         form = ImageUploadForm(request.POST, request.FILES)
         if form.is_valid():
             images = form.cleaned_data['images']
             results = []
+            valid_extensions = ('.jpg', '.jpeg', '.png')
             for img in images:
+                if not img.name.lower().endswith(valid_extensions):
+                    warnings.append(f"File {img.name} is not a valid image type. Only JPG and PNG are allowed.")
+                    continue
+
                 try:
                     Image.open(img)
                 except Exception as e:
-                    print(f"File {img.name} is not a valid image: {e}")
+                    warnings.append(f"File {img.name} could not be opened as an image: {e}")
                     continue
 
                 ai_result = dummy_ai_module(img)
@@ -52,7 +58,8 @@ def upload_images(request):
             print(form.errors)
     else:
         form = ImageUploadForm()
-    return render(request, 'upload.html', {'form': form, 'results': results})
+    return render(request, 'upload.html', {'form': form, 'results': results, 'warnings': warnings})
+
 
 
 def download_all_analysis(request):
