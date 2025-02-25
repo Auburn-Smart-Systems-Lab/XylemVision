@@ -1,4 +1,5 @@
 from pathlib import Path
+import mongoengine
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -55,6 +56,11 @@ DATABASES = {
     }
 }
 
+mongoengine.connect(
+    db='root-structural-analysis',
+    host='172.19.187.4',
+    port=27017
+)
 
 AUTH_PASSWORD_VALIDATORS = [
     {
