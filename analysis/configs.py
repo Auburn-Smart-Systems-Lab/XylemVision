@@ -2,11 +2,11 @@ import cv2
 import torch
 
 
-ALPHA        = 0.65     # mask fill opacity
-OUTLINE_W    = 2        # mask outline width (px)
-MIN_ROOT_PX  = 2000     # min pixels for a valid root mask
-POS_PTS      = 36       # number of positive prompt points
-NEG_EDGE     = 20       # negative prompt offset
+ALPHA        = 0.65
+OUTLINE_W    = 2
+MIN_ROOT_PX  = 2000
+POS_PTS      = 36
+NEG_EDGE     = 20
 
 YOLO_WEIGHTS = "weight/YOLO/best.pt"
 SAM_TYPE     = "vit_l"

@@ -1,9 +1,24 @@
 from .configs import _DILATE_KERN
+from pathlib import Path
 from .configs import *
 from PIL import Image, ImageDraw
 import numpy as np
 import random
 import cv2
+
+def load_image(img_path):
+    p = Path(img_path)
+    bgr = cv2.imread(str(p))
+    if bgr is None:
+        raise FileNotFoundError(f"Image not found: {p}")
+    return p, bgr, cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+
+def group_boxes_by_class(boxes, labels):
+    cls2bx = {"Xylem": [], "Vascular bundle": [], "Total root": []}
+    for box, label in zip(boxes, labels):
+        if label in cls2bx:
+            cls2bx[label].append(box)
+    return cls2bx
 
 def class_color_cycle(cls: str, k: int) -> tuple[int,int,int]:
     """Color for each mask instance: random for Xylem, fixed cycling for others."""

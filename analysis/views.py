@@ -1,256 +1,240 @@
-import base64
-import io
-from django.http import HttpResponse
 from django.shortcuts import render
-from .forms import ImageUploadForm
-from .dummy_ai import dummy_ai_module
+from django.http import HttpResponse, HttpResponseBadRequest
 from PIL import Image
+from io import BytesIO
+import base64
 import openpyxl
-from openpyxl.styles import Font, PatternFill, Alignment
-from openpyxl.drawing.image import Image as OXI
+from openpyxl.styles import PatternFill
+from .engine import progressive_yolo_sam
 
-def upload_images(request):
-    warnings = []
-    results = None
-    if request.method == 'POST':
-        form = ImageUploadForm(request.POST, request.FILES)
-        if form.is_valid():
-            images = form.cleaned_data['images']
-            results = []
-            valid_extensions = ('.jpg', '.jpeg', '.png')
-            for img in images:
-                if not img.name.lower().endswith(valid_extensions):
-                    warnings.append(f"File {img.name} is not a valid image type. Only JPG and PNG are allowed.")
-                    continue
+_last_analysis_cache = {}
 
-                try:
-                    Image.open(img)
-                except Exception as e:
-                    warnings.append(f"File {img.name} could not be opened as an image: {e}")
-                    continue
+def pil_to_base64(img):
+    buffer = BytesIO()
+    img.save(buffer, format='PNG')
+    encoded = base64.b64encode(buffer.getvalue()).decode()
+    return f"data:image/png;base64,{encoded}"
 
-                ai_result = dummy_ai_module(img)
-                
-                processed_b64 = base64.b64encode(ai_result["processed_file"].read()).decode('utf-8')
-                ai_result["processed_file"].seek(0)
-                vascular_b64 = base64.b64encode(ai_result["vascular_file"].read()).decode('utf-8')
-                ai_result["vascular_file"].seek(0)
-                total_root_b64 = base64.b64encode(ai_result["total_root_file"].read()).decode('utf-8')
-                ai_result["total_root_file"].seek(0)
-                xylem_b64 = base64.b64encode(ai_result["xylem_file"].read()).decode('utf-8')
-                ai_result["xylem_file"].seek(0)
-                
-                result_dict = {
-                    "filename": img.name,
-                    "processed_image": processed_b64,
-                    "vascular_image": vascular_b64,
-                    "total_root_image": total_root_b64,
-                    "xylem_image": xylem_b64,
-                    "vascular_area": ai_result["vascular_area"],
-                    "vascular_diameter": ai_result["vascular_diameter"],
-                    "xylem_count": ai_result["xylem_count"],
-                    "xylem_diameter": ai_result["xylem_diameter"],
-                    "xylem_details": ai_result["xylem_details"],
-                }
-                results.append(result_dict)
-            request.session['analysis_results'] = results
-        else:
-            print(form.errors)
-    else:
-        form = ImageUploadForm()
-    return render(request, 'upload.html', {'form': form, 'results': results, 'warnings': warnings})
+def root_analysis_view(request):
+    context = {}
+    results = []
 
+    if request.method == 'POST' and request.FILES.getlist('image'):
+        images = request.FILES.getlist('image')
+        results.clear()
 
+        for image_file in images:
+            image = Image.open(image_file).convert('RGB')
+            result, original_img, overlay_img = progressive_yolo_sam(image)
 
-def download_all_analysis(request):
-    results = request.session.get('analysis_results')
-    if not results:
-        return HttpResponse("No analyses available for download.", status=400)
-    
-    wb = openpyxl.Workbook()
-    default_sheet = wb.active
-    wb.remove(default_sheet)
-    
-    def add_image(ws, base64_str, cell, width, height):
-        img_data = base64.b64decode(base64_str)
-        img_io = io.BytesIO(img_data)
-        img = OXI(img_io)
-        img.width = width
-        img.height = height
-        ws.add_image(img, cell)
-    
-    for result in results:
-        sheet_name = result.get("filename")
-        if len(sheet_name) > 31:
-            sheet_name = sheet_name[:31]
-        ws = wb.create_sheet(title=sheet_name)
-        
-        for col in ["A", "B", "C", "D"]:
-            ws.column_dimensions[col].width = 25
-        for col in ["E", "F", "G", "H"]:
-            ws.column_dimensions[col].width = 20
-        
-        ws.merge_cells("A1:H1")
-        header = ws["A1"]
-        header.value = f"Analysis Report for {result.get('filename')}"
-        header.font = Font(bold=True, size=14, color="FFFFFF")
-        header.fill = PatternFill(start_color="007bff", end_color="007bff", fill_type="solid")
-        header.alignment = Alignment(horizontal="center", vertical="center")
-        ws.row_dimensions[1].height = 30
-        
-        data_start = 3
-        ws["A" + str(data_start)] = "Metric"
-        ws["B" + str(data_start)] = "Value"
-        ws["A" + str(data_start)].font = Font(bold=True)
-        ws["B" + str(data_start)].font = Font(bold=True)
-        current_row = data_start + 1
-        metrics = [
-            ("Vascular Area", result.get("vascular_area")),
-            ("Vascular Diameter", result.get("vascular_diameter")),
-            ("Xylem Count", result.get("xylem_count")),
-            ("Xylem Diameter", result.get("xylem_diameter")),
-        ]
-        for metric, value in metrics:
-            ws["A" + str(current_row)] = metric
-            ws["B" + str(current_row)] = value
-            current_row += 1
-        
-        current_row += 1
-        ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
-        cell = ws.cell(row=current_row, column=1)
-        cell.value = "Xylem Details"
-        cell.font = Font(bold=True, color="FFFFFF")
-        cell.fill = PatternFill(start_color="28a745", end_color="28a745", fill_type="solid")
-        cell.alignment = Alignment(horizontal="center")
-        current_row += 1
-        ws["A" + str(current_row)] = "ID"
-        ws["B" + str(current_row)] = "Area"
-        ws["C" + str(current_row)] = "Diameter"
-        for col in ["A", "B", "C"]:
-            ws[col + str(current_row)].font = Font(bold=True)
-        current_row += 1
-        for detail in result.get("xylem_details", []):
-            ws["A" + str(current_row)] = detail.get("id")
-            ws["B" + str(current_row)] = detail.get("area")
-            ws["C" + str(current_row)] = detail.get("diameter")
-            current_row += 1
+            xylem_details = result['metrics'].get('xylem_details', [])
+            colours = [c for c in result.get('colours', []) if c.get('class') == 'Xylem']
 
-        ws["E2"] = "Processed"
-        ws["G2"] = "Vascular Bundle Mask"
-        ws["E11"] = "Total Root Mask"
-        ws["G11"] = "Xylem Mask"
-        add_image(ws, result.get("processed_image"), "E3", 100, 80)
-        add_image(ws, result.get("vascular_image"), "G3", 100, 80)
-        add_image(ws, result.get("total_root_image"), "E12", 100, 80)
-        add_image(ws, result.get("xylem_image"), "G12", 100, 80)
-        ws.row_dimensions[3].height = 80
-        ws.row_dimensions[12].height = 80
-    
-    stream = io.BytesIO()
-    wb.save(stream)
-    stream.seek(0)
-    response = HttpResponse(
-        stream,
-        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    )
-    response['Content-Disposition'] = 'attachment; filename=all_analyses.xlsx'
-    return response
+            merged = []
+            extra_metrics = []
+            extra_colours = []
 
+            max_len = max(len(xylem_details), len(colours))
 
-def download_analysis(request, analysis_index):
-    try:
-        index = int(analysis_index) - 1
-    except ValueError:
-        return HttpResponse("Invalid analysis index.", status=400)
+            for i in range(max_len):
+                detail = xylem_details[i] if i < len(xylem_details) else None
+                color = colours[i] if i < len(colours) and colours[i]['inst'] == i else None
 
-    results = request.session.get('analysis_results')
-    if results is None or index < 0 or index >= len(results):
-        return HttpResponse("Invalid analysis index or no analyses available.", status=400)
-    
-    result = results[index]
+                if detail and color:
+                    merged.append({
+                        'instance': i,
+                        **detail,
+                        'rgb': color['rgb']
+                    })
+                elif detail:
+                    extra_metrics.append({'instance': i, **detail})
+                elif color:
+                    extra_colours.append({'instance': i, 'rgb': color['rgb']})
+
+            analysis = {
+                'file': image_file.name,
+                'original_image': pil_to_base64(original_img),
+                'overlay_image': pil_to_base64(overlay_img),
+                'n_xylem': result['n_xylem'],
+                'n_vb': result['n_vb'],
+                'n_root': result['n_root'],
+                'metrics': result['metrics'],
+                'merged_xylem': merged,
+                'extra_metrics': extra_metrics,
+                'extra_colours': extra_colours,
+            }
+
+            results.append(analysis)
+            _last_analysis_cache[image_file.name] = analysis
+
+        context['results'] = results
+
+    return render(request, 'upload.html', context)
+
+# Helper: create XLSX workbook for one analysis result
+def generate_xlsx_for_result(result):
     wb = openpyxl.Workbook()
     ws = wb.active
+    ws.title = "Summary"
 
-    sheet_name = result.get("filename")
-    if len(sheet_name) > 31:
-        sheet_name = sheet_name[:31]
-    ws.title = sheet_name
+    # Summary Metrics
+    ws.append(["Metric", "Value"])
+    ws.append(["Xylem Count", result['n_xylem']])
+    ws.append(["Vascular Bundle Total Area", result['metrics'].get('vb_total_area', '')])
+    ws.append(["Vascular Bundle Max Diameter", result['metrics'].get('vb_max_diameter', '')])
+    ws.append(["Root Total Area", result['metrics'].get('root_total_area', '')])
+    ws.append(["Root Max Diameter", result['metrics'].get('root_max_diameter', '')])
+    ws.append([])
 
-    for col in ["A", "B", "C", "D"]:
-        ws.column_dimensions[col].width = 25
-    for col in ["E", "F", "G", "H"]:
-        ws.column_dimensions[col].width = 20
+    # Merged Xylem Details with Colors
+    merged = result.get('merged_xylem', [])
+    if merged:
+        ws.append(["Xylem Details"])
+        headers = [key for key in merged[0].keys() if key not in ('instance', 'rgb')]
+        headers.append("Color (RGB)")
+        ws.append(headers)
 
-    ws.merge_cells("A1:H1")
-    header = ws["A1"]
-    header.value = f"Analysis Report for {result.get('filename')}"
-    header.font = Font(bold=True, size=14, color="FFFFFF")
-    header.fill = PatternFill(start_color="007bff", end_color="007bff", fill_type="solid")
-    header.alignment = Alignment(horizontal="center", vertical="center")
-    ws.row_dimensions[1].height = 30
+        for row in merged:
+            row_values = [row[key] for key in headers if key != "Color (RGB)"]
+            row_values.append(str(tuple(row['rgb'])))
+            ws.append(row_values)
 
-    data_start = 3
-    ws["A" + str(data_start)] = "Metric"
-    ws["B" + str(data_start)] = "Value"
-    ws["A" + str(data_start)].font = Font(bold=True)
-    ws["B" + str(data_start)].font = Font(bold=True)
-    current_row = data_start + 1
-    metrics = [
-        ("Vascular Area", result.get("vascular_area")),
-        ("Vascular Diameter", result.get("vascular_diameter")),
-        ("Xylem Count", result.get("xylem_count")),
-        ("Xylem Diameter", result.get("xylem_diameter")),
-    ]
-    for metric, value in metrics:
-        ws["A" + str(current_row)] = metric
-        ws["B" + str(current_row)] = value
-        current_row += 1
+            # Apply fill color to the last cell
+            fill_color = openpyxl.styles.PatternFill(
+                start_color="{:02X}{:02X}{:02X}".format(*row['rgb']),
+                end_color="{:02X}{:02X}{:02X}".format(*row['rgb']),
+                fill_type="solid"
+            )
+            cell = ws.cell(row=ws.max_row, column=len(headers))
+            cell.fill = fill_color
 
-    current_row += 1
-    ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
-    cell = ws.cell(row=current_row, column=1)
-    cell.value = "Xylem Details"
-    cell.font = Font(bold=True, color="FFFFFF")
-    cell.fill = PatternFill(start_color="28a745", end_color="28a745", fill_type="solid")
-    cell.alignment = Alignment(horizontal="center")
-    current_row += 1
-    ws["A" + str(current_row)] = "ID"
-    ws["B" + str(current_row)] = "Area"
-    ws["C" + str(current_row)] = "Diameter"
-    for col in ["A", "B", "C"]:
-        ws[col + str(current_row)].font = Font(bold=True)
-    current_row += 1
-    for detail in result.get("xylem_details", []):
-        ws["A" + str(current_row)] = detail.get("id")
-        ws["B" + str(current_row)] = detail.get("area")
-        ws["C" + str(current_row)] = detail.get("diameter")
-        current_row += 1
+        ws.append([])
 
-    def add_image(ws, base64_str, cell, width, height):
-        img_data = base64.b64decode(base64_str)
-        img_io = io.BytesIO(img_data)
-        img = OXI(img_io)
-        img.width = width
-        img.height = height
-        ws.add_image(img, cell)
+    # Extra unmatched metrics
+    extra_metrics = result.get('extra_metrics', [])
+    if extra_metrics:
+        ws.append(["Unmatched Xylem Metrics"])
+        headers = [key for key in extra_metrics[0].keys() if key != 'instance']
+        ws.append(headers)
+        for row in extra_metrics:
+            ws.append([row[key] for key in headers])
+        ws.append([])
 
-    ws["E2"] = "Processed"
-    ws["G2"] = "Vascular Bundle Mask"
-    ws["E11"] = "Total Root Mask"
-    ws["G11"] = "Xylem Mask"
-    add_image(ws, result.get("processed_image"), "E3", 100, 80)
-    add_image(ws, result.get("vascular_image"), "G3", 100, 80)
-    add_image(ws, result.get("total_root_image"), "E12", 100, 80)
-    add_image(ws, result.get("xylem_image"), "G12", 100, 80)
-    ws.row_dimensions[3].height = 80
-    ws.row_dimensions[12].height = 80
+    # Extra unmatched colors
+    extra_colours = result.get('extra_colours', [])
+    if extra_colours:
+        ws.append(["Unmatched Overlay Colors"])
+        ws.append(["Color (RGB)"])
+        for color in extra_colours:
+            ws.append([str(tuple(color['rgb']))])
+            fill_color = openpyxl.styles.PatternFill(
+                start_color="{:02X}{:02X}{:02X}".format(*color['rgb']),
+                end_color="{:02X}{:02X}{:02X}".format(*color['rgb']),
+                fill_type="solid"
+            )
+            cell = ws.cell(row=ws.max_row, column=1)
+            cell.fill = fill_color
 
-    stream = io.BytesIO()
-    wb.save(stream)
-    stream.seek(0)
+    return wb
+
+# Download XLSX for a single analysis
+def download_xlsx(request):
+    if request.method != 'POST':
+        return HttpResponseBadRequest("Invalid request method")
+
+    filename = request.POST.get('filename')
+    if not filename or filename not in _last_analysis_cache:
+        return HttpResponseBadRequest("No analysis found for that file")
+
+    result = _last_analysis_cache[filename]
+    wb = generate_xlsx_for_result(result)
+
     response = HttpResponse(
-        stream,
-        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     )
-    response['Content-Disposition'] = f'attachment; filename={sheet_name}.xlsx'
+    response['Content-Disposition'] = f'attachment; filename="{filename}_analysis.xlsx"'
+    wb.save(response)
+    return response
+
+# Download XLSX for all analyses combined
+def download_all_xlsx(request):
+    if request.method != 'POST':
+        return HttpResponseBadRequest("Invalid request method")
+
+    filenames = request.POST.getlist('filenames')
+    if not filenames:
+        return HttpResponseBadRequest("No files selected")
+
+    wb = openpyxl.Workbook()
+    # Remove default sheet
+    wb.remove(wb.active)
+
+    for filename in filenames:
+        if filename not in _last_analysis_cache:
+            continue
+        result = _last_analysis_cache[filename]
+
+        ws = wb.create_sheet(title=filename[:31])  # max sheet title length is 31
+        # Summary Metrics
+        ws.append(["Metric", "Value"])
+        ws.append(["Xylem Count", result['n_xylem']])
+        ws.append(["Vascular Bundle Total Area", result['metrics'].get('vb_total_area', '')])
+        ws.append(["Vascular Bundle Max Diameter", result['metrics'].get('vb_max_diameter', '')])
+        ws.append(["Root Total Area", result['metrics'].get('root_total_area', '')])
+        ws.append(["Root Max Diameter", result['metrics'].get('root_max_diameter', '')])
+        ws.append([])
+
+        # Merged Xylem Details
+        merged = result.get('merged_xylem', [])
+        if merged:
+            ws.append(["Xylem Details"])
+            headers = [key for key in merged[0].keys() if key not in ('instance', 'rgb')]
+            headers.append("Color (RGB)")
+            ws.append(headers)
+
+            for row in merged:
+                row_values = [row[key] for key in headers if key != "Color (RGB)"]
+                row_values.append(str(tuple(row['rgb'])))
+                ws.append(row_values)
+
+                fill_color = openpyxl.styles.PatternFill(
+                    start_color="{:02X}{:02X}{:02X}".format(*row['rgb']),
+                    end_color="{:02X}{:02X}{:02X}".format(*row['rgb']),
+                    fill_type="solid"
+                )
+                cell = ws.cell(row=ws.max_row, column=len(headers))
+                cell.fill = fill_color
+
+            ws.append([])
+
+        # Extra unmatched metrics
+        extra_metrics = result.get('extra_metrics', [])
+        if extra_metrics:
+            ws.append(["Unmatched Xylem Metrics"])
+            headers = [key for key in extra_metrics[0].keys() if key != 'instance']
+            ws.append(headers)
+            for row in extra_metrics:
+                ws.append([row[key] for key in headers])
+            ws.append([])
+
+        # Extra unmatched colors
+        extra_colours = result.get('extra_colours', [])
+        if extra_colours:
+            ws.append(["Unmatched Overlay Colors"])
+            ws.append(["Color (RGB)"])
+            for color in extra_colours:
+                ws.append([str(tuple(color['rgb']))])
+                fill_color = openpyxl.styles.PatternFill(
+                    start_color="{:02X}{:02X}{:02X}".format(*color['rgb']),
+                    end_color="{:02X}{:02X}{:02X}".format(*color['rgb']),
+                    fill_type="solid"
+                )
+                cell = ws.cell(row=ws.max_row, column=1)
+                cell.fill = fill_color
+
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = 'attachment; filename="all_analysis_combined.xlsx"'
+    wb.save(response)
     return response
