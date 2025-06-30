@@ -39,3 +39,8 @@
    ```bash
    python manage.py runserver
    ```
+
+   ```bash
+   docker build -t root-structural-analysis .
+   docker run -p 8000:8000 root-structural-analysis
+   ```
