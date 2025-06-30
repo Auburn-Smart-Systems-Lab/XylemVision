@@ -1,18 +1,26 @@
-FROM python:3.11
+FROM python:3.11-slim
 
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y \
     build-essential \
     libpq-dev \
+    wget \
     && rm -rf /var/lib/apt/lists/*
+
+RUN pip install gdown
 
 COPY requirements.txt /app/
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
+
+RUN mkdir -p /app/weight/SAM /app/weight/YOLO
+
+RUN gdown https://drive.google.com/uc?id=16QARfz1cpumYtwBSf23nlBWtr3hweTQy -O /app/weight/SAM/sam_vit_l_0b3195.pth
+RUN gdown https://drive.google.com/uc?id=1VuYeIrlKAVg_2QMs4L00ndToZVjjMeTd -O /app/weight/YOLO/best.pt
 
 COPY . /app/
 

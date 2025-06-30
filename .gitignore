@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 weight
 temp_results
+staticfiles
 
 # C extensions
 *.so
