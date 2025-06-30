@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 weight
+temp_results
 
 # C extensions
 *.so
