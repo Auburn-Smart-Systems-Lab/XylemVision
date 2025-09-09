@@ -31,8 +31,8 @@ Ensure you have **Docker** and **Docker Compose** installed on your machine.
 1. Clone the repository:
 
     ```bash
-    git clone https://github.com/mohtasimhadi/root-structural-analysis.git
-    cd root-structural-analysis
+    git clone https://github.com/Auburn-Smart-Systems-Lab/root-structural-analysis-client-app.git
+    cd root-structural-analysis-client-app
     ```
 
 2. Build the Docker image:
