@@ -44,7 +44,7 @@ Ensure you have **Docker** and **Docker Compose** installed on your machine.
 3. Run the Docker container:
 
     ```bash
-    docker run -p 8000:8000 root-structural-analysis
+    docker run --gpus '"device=0"' -p 8000:8000 root-structural-analysis
     ```
 
     This will start the application, and it will be accessible at `http://localhost:8000`.
