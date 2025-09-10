@@ -1,4 +1,4 @@
-# Root Structural Analysis - Django App
+# XylemVision - Django App
 
 This repository contains a **Django** application for performing root structural analysis. The app is set up with **Gunicorn** for production deployment, and it uses weights for **SAM (Segment Anything Model)** and **YOLO (You Only Look Once)**.
 
