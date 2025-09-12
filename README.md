@@ -8,6 +8,8 @@ This repository contains a **Django** application for performing root structural
 - Django-based web application for serving the analysis.
 - Pre-trained model weights included for SAM and YOLO.
 
+![Sample App Screenshot](assets/sample.png)
+
 ## Requirements
 
 - **Python**: 3.11
