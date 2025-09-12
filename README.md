@@ -2,13 +2,13 @@
 
 This repository contains a **Django** application for performing root structural analysis. The app is set up with **Gunicorn** for production deployment, and it uses weights for **SAM (Segment Anything Model)** and **YOLO (You Only Look Once)**.
 
+![Sample App Screenshot](assets/sample.png)
+
 ## Features
 
 - Root structural analysis using SAM and YOLO.
 - Django-based web application for serving the analysis.
 - Pre-trained model weights included for SAM and YOLO.
-
-![Sample App Screenshot](assets/sample.png)
 
 ## Requirements
 
