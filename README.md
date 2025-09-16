@@ -1,6 +1,6 @@
 # XylemVision
 
-This repository contains a **Django** application for performing root structural analysis. The app is set up with **Gunicorn** for production deployment, and it uses weights for **SAM (Segment Anything Model)** and **YOLO (You Only Look Once)**.
+This repository contains a **Django** application for performing structural analysis of xylems. The app is set up with **Gunicorn** for production deployment, and it uses weights for **SAM (Segment Anything Model)** and **YOLO (You Only Look Once)**.
 
 ![Sample App Screenshot](assets/sample.png)
 
@@ -33,20 +33,20 @@ Ensure you have **Docker** and **Docker Compose** installed on your machine.
 1. Clone the repository:
 
     ```bash
-    git clone https://github.com/Auburn-Smart-Systems-Lab/root-structural-analysis-client-app.git
-    cd root-structural-analysis-client-app
+    git clone https://github.com/Auburn-Smart-Systems-Lab/XylemVision.git
+    cd XylemVision
     ```
 
 2. Build the Docker image:
 
     ```bash
-    docker build -t root-structural-analysis .
+    docker build -t xylem-vision .
     ```
 
 3. Run the Docker container:
 
     ```bash
-    docker run --gpus '"device=0"' -p 8000:8000 root-structural-analysis
+    docker run --gpus '"device=0"' -p 8000:8000 xylem-vision
     ```
 
     This will start the application, and it will be accessible at `http://localhost:8000`.
